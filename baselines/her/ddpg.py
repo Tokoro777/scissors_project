@@ -285,6 +285,7 @@ class DDPG(object):
             batch, rewards = self.sample_batch()
         assert len(self.buffer_ph_tf) == len(batch)
         self.sess.run(self.stage_op, feed_dict=dict(zip(self.buffer_ph_tf, batch)))
+        print("ステージバッチのreward:", sum(rewards))
         return sum(rewards)
 
     def train(self, stage=True):

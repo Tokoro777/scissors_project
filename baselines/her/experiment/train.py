@@ -15,7 +15,7 @@ from baselines.her.util import mpi_fork
 
 from subprocess import CalledProcessError
 
-from baselines.her.experiment.pos_database import PosDatabase
+from baselines.her.experiment.pos_database import SynergyManager
 
 # --------------------------------------------------------------------------------------
 from baselines.custom_logger import CustomLoggerObject
@@ -63,7 +63,7 @@ def train(min_num, max_num, num_axis, reward_lambda, # nishimura
 
     # motoda --
     policy.reward_lambda = reward_lambda
-    pos_database = PosDatabase(reward_lambda, num_axis, poslist, 200)
+    pos_database = SynergyManager(reward_lambda, num_axis, poslist, 200)
     policy.buffer.set_pos_database(pos_database)
 
     logger.info("Training...")
@@ -80,7 +80,7 @@ def train(min_num, max_num, num_axis, reward_lambda, # nishimura
 
             episode = rollout_worker.generate_rollouts(min_num=min_num, num_axis=num_axis,
                                                        reward_lambda=reward_lambda,
-                                                       pos_database=pos_database,
+                                                       synergy=pos_database,
                                                        synergy_type=synergy_type)
 
             if len(pos_database.get_poslist()) > min_num:
@@ -100,7 +100,7 @@ def train(min_num, max_num, num_axis, reward_lambda, # nishimura
         evaluator.clear_history()
         for _ in range(n_test_rollouts):
             evaluator.generate_rollouts(min_num=min_num, num_axis=num_axis,
-                                        reward_lambda=reward_lambda, pos_database=pos_database,
+                                        reward_lambda=reward_lambda, synergy=pos_database,
                                         synergy_type=synergy_type)
         # record logs
         logger.record_tabular('epoch', epoch)

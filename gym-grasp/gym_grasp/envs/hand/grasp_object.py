@@ -42,11 +42,12 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def __init__(
             self, model_path, target_position, target_rotation,
             target_position_range, reward_type, initial_qpos={},
-            randomize_initial_position=True, randomize_initial_rotation=True, randomize_object=True,
-            distance_threshold=0.01, rotation_threshold=0.1, n_substeps=20, relative_control=False,
+            randomize_initial_position=False, randomize_initial_rotation=False, randomize_object=False,
+            distance_threshold=0.01, rotation_threshold=0.1, angle_threshold=0.1, n_substeps=20, relative_control=False,
             ignore_z_target_rotation=False,
-            target_id=0, num_axis=5, reward_lambda=0.5
-    ):
+            target_id=0, num_axis=5, reward_lambda=0.5, desired_angle=1
+    ):     # 回転角度の誤差の閾値をとりあえず0.1(約5.73度)に設定。
+        # 整数にする必要があるため(tensorflowのinit的に)、目標角度は1.0(約57度)にする。←いったん目標回転角度を90度に設定。π/2
         """Initializes a new Hand manipulation environment.
 
         Args:
@@ -84,15 +85,19 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         self.randomize_initial_position = randomize_initial_position
         self.distance_threshold = distance_threshold
         self.rotation_threshold = rotation_threshold
+        self.angle_threshold = angle_threshold
         self.reward_type = reward_type
         self.ignore_z_target_rotation = ignore_z_target_rotation
 
-        self.object_list = ["box:joint", "apple:joint", "banana:joint", "beerbottle:joint", "book:joint",
+        self.synergy = None
+
+        self.object_list = ["scissors_hinge:joint", "box:joint", "apple:joint", "banana:joint", "beerbottle:joint", "book:joint",
                             "needle:joint", "pen:joint", "teacup:joint"]
         self.target_id = target_id
         self.num_axis = num_axis  # the number of components
         self.randomize_object = randomize_object  # random target (boolean)
         self.reward_lambda = reward_lambda  # a weight for the second term of the reward function (float)
+        self.desired_angle = desired_angle
 
         if self.randomize_object == True:
             self.object = self.object_list[random.randrange(0, 8, 1)]  # in case of randomly selected target
@@ -116,11 +121,24 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         self.target_id = _target_id
         self.randomize_object = _randomize_object
 
+    def set_synergy(self, synergy):
+        self.synergy = synergy
+
     def _get_achieved_goal(self):
         # Object position and rotation.
         object_qpos = self.sim.data.get_joint_qpos(self.object)
         assert object_qpos.shape == (7,)
         return object_qpos
+
+    def _get_achieved_angle(self):
+        # はさみの回転角度
+        # ジョイント名を指定
+        hinge_joint_name = "scissors_hinge:joint"
+        # はさみのジョイントの位置を取得
+        hinge_joint_index = self.sim.model.joint_name2id(hinge_joint_name)
+        hinge_joint_angle = self.sim.data.qpos[hinge_joint_index]
+        print("ジョイント", hinge_joint_name, "の角度:", hinge_joint_angle)
+        return hinge_joint_angle
 
     # def _randamize_target(self):
     #     self.sim.data.set_joint_qpos("target0:joint", [1, 0.87, 0.4, 1, 0, 0, 0])
@@ -159,10 +177,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     # GoalEnv methods
     # ----------------------------  
 
-    def compute_reward(self, achieved_goal, goal, info):
+    def compute_reward(self, achieved_angle, desired_angle, info):
         if self.reward_type == 'sparse':
             gpenalty = info["is_in_grasp_space"].T[0]
-            success = self._is_success(achieved_goal, goal, gpenalty).astype(np.float32)
+            success = self._is_success_angle(achieved_angle, desired_angle, gpenalty).astype(np.float32)
             return success - 1.
         else:
             # Train時のみ処理されるように
@@ -171,11 +189,13 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
             c_lambda = info['lambda']
             gpenalty = info["is_in_grasp_space"].T[0]
-            success = self._is_success(achieved_goal, goal, gpenalty).astype(np.float32)  # 成否（1,0）を取得する
+            success = self._is_success_angle(achieved_angle, desired_angle, gpenalty).astype(np.float32)  # 成否（1,0）を取得する
             cpenalty = info["contact_penalty"].T[0]
             success = success * gpenalty
 
-            reward = (success - 1.) - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
+            reward = (success - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
+
+            print("報酬:", reward)
 
             return reward
 
@@ -187,6 +207,12 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         achieved_pos = (d_pos < self.distance_threshold).astype(np.float32)
         achieved_rot = (d_rot < self.rotation_threshold).astype(np.float32)
         achieved_both = achieved_pos * achieved_rot * isingrasp
+        return achieved_both
+
+    def _is_success_angle(self, achieved_angle, desired_angle, isingrasp):
+        d_angle = desired_angle - achieved_angle
+        achieved_angle = (d_angle < self.angle_threshold).astype(np.float32)
+        achieved_both = achieved_angle * isingrasp
         return achieved_both
 
     def _env_setup(self, initial_qpos):
@@ -203,6 +229,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self.object = self.object_list[random.randrange(0, 8, 1)]  # in case of randomly selected target
         else:
             self.object = self.object_list[self.target_id]  # target
+
         # --
         initial_qpos = self.init_object_qpos
         initial_pos, initial_quat = initial_qpos[:3], initial_qpos[3:]
@@ -245,7 +272,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos(self.object, initial_qpos)
+        self.sim.data.set_joint_qpos("scissors_hinge:joint", 0)  # はさみの回転角度を0にリセットする
         self.step_n = 0
 
         def is_on_palm():
@@ -272,6 +299,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             assert self.target_position_range.shape == (3, 2)
             offset = self.np_random.uniform(self.target_position_range[:, 0], self.target_position_range[:, 1])
             assert offset.shape == (3,)
+
             target_pos = self.sim.data.get_joint_qpos(self.object)[:3] + offset
         elif self.target_position in ['ignore', 'fixed']:
             target_pos = self.sim.data.get_joint_qpos(self.object)[:3]
@@ -331,18 +359,19 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _get_obs(self):
         robot_qpos, robot_qvel = robot_get_obs(self.sim)
-        object_qvel = self.sim.data.get_joint_qvel(self.object)
-        achieved_goal = self._get_achieved_goal().ravel()  # this contains the object position + rotation
+        # object_qvel = self.sim.data.get_joint_qvel(self.object)  # オブジェクトの速度はいらない？？
+        # achieved_goal = self._get_achieved_goal().ravel()  # this contains the object position + rotation
+        achieved_angle = self._get_achieved_angle().ravel()  # 回転角度は1つ
         sensordata = self._get_contact_forces()
 
-        observation = np.concatenate([robot_qpos, robot_qvel, object_qvel, achieved_goal, sensordata])
+        observation = np.concatenate([robot_qpos, robot_qvel, achieved_angle, sensordata])
         # observation = np.concatenate([robot_qpos, robot_qvel, object_qvel, achieved_goal, [self.target_id]])
         # observation = np.concatenate([robot_qpos, robot_qvel, object_qvel, achieved_goal]) # temp
 
         return {
             'observation': observation.copy(),
-            'achieved_goal': achieved_goal.copy(),
-            'desired_goal': self.goal.ravel().copy(),
+            'achieved_angle': achieved_angle.copy(),
+            'desired_angle': self.desired_angle,      # いったん目標回転角度を90度に設定。π/2
         }
 
     def _get_grasp_center_space(self, radius=0.07):
@@ -352,13 +381,14 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         pospalm = pospalm + rotpalm.apply([0, 0, 0.05])
         rotgrasp = rotpalm * euler2mat([np.pi / 2, 0, 0])
-        posgrasp = pospalm + rotgrasp.apply([0, 0, radius])
+        posgrasp = pospalm + rotgrasp.apply([0, 0, radius+0.02])
         return posgrasp
 
     def _is_in_grasp_space(self, radius=0.05):
         posgrasp = self._get_grasp_center_space(radius=radius)
-        posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
-        return mean_squared_error(posgrasp, posobject, squared=False) < 0.05
+        # posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
+        posobject = self.init_object_qpos[:3]   # オブジェクトの位置は、初期位置の情報にした。
+        return mean_squared_error(posgrasp, posobject, squared=False) < 0.05   # はさみの中心とつかむ場所との誤差なので、0.05よりももうすこし広げて寛容にしたほうがいいかもしれない
 
     def _display_grasp_space(self):
         # show a direction for the grasp
@@ -445,23 +475,50 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         done = False
 
         info = {
-            'is_success': self._is_success(obs['achieved_goal'], self.goal, 1.0 if self._is_in_grasp_space() else 0.0),
+            'is_success': self._is_success_angle(obs['achieved_angle'], self.desired_angle, 1.0 if self._is_in_grasp_space() else 0.0),
             "contact_penalty": self._check_contact(),
             "is_in_grasp_space": 1.0 if self._is_in_grasp_space() else 0.0
         }
-        reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+        reward = self.compute_reward(obs['achieved_angle'], self.desired_angle, info)
 
-        if self.step_n < 20:
-            self.sim.data.set_joint_qpos(self.object, self.initial_qpos)
+        # if self.step_n < 20:           # オブジェクト(はさみ)ははじめから固定されているので、初期位置にセットする必要はなし
+        #     self.sim.data.set_joint_qpos(self.object, self.initial_qpos)
 
         # Options for displaying information
         # self._display_contacts()
-        # if self._is_in_grasp_space():
-        #     self._display_grasp_space()
+        if self._is_in_grasp_space():
+            self._display_grasp_space()
 
         return obs, reward, done, info
 
-
+    # def _set_action(self, syn_action):
+    #     assert syn_action.shape == (2,)
+    #
+    #     ctrlrange = self.sim.model.actuator_ctrlrange
+    #     actuation_range = (ctrlrange[:, 1] - ctrlrange[:, 0]) / 2.
+    #     if self.relative_control:
+    #         actuation_center = np.zeros_like(syn_action)
+    #         for i in range(self.sim.data.ctrl.shape[0]):
+    #             actuation_center[i] = self.sim.data.get_joint_qpos(
+    #                 self.sim.model.actuator_names[i].replace(':A_', ':'))
+    #         for joint_name in ['FF', 'MF', 'RF', 'LF']:
+    #             act_idx = self.sim.model.actuator_name2id(
+    #                 'robot0:A_{}J1'.format(joint_name))
+    #             actuation_center[act_idx] += self.sim.data.get_joint_qpos(
+    #                 'robot0:{}J0'.format(joint_name))
+    #     else:
+    #         actuation_center = (ctrlrange[:, 1] + ctrlrange[:, 0]) / 2.
+    #
+    #     action = None
+    #     if self.synergy is None:
+    #         action = np.zeros(20)
+    #     else:
+    #         # Synergy transformation
+    #         action = syn_action[0] * self.synergy.axis[0]
+    #
+    #     action = np.concatenate((action, [action[-1]]))
+    #
+    #     self.sim.data.ctrl[:] = actuation_center + action * actuation_range
 class GraspObjectEnv(ManipulateEnv):
     def __init__(self, target_position='random', target_rotation='xyz', reward_type="not_sparse"):
         super(GraspObjectEnv, self).__init__(

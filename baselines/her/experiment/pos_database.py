@@ -1,12 +1,15 @@
 from sklearn.decomposition import PCA
+import numpy as np
 
-
-class PosDatabase:
+class SynergyManager:
     def __init__(self, reward_lambda, num_axis, init_poslist, maxn_pos):
         self.poslist = init_poslist
         self.reward_lambda = reward_lambda
         self.num_axis = num_axis
         self.maxn_pos = maxn_pos
+
+        self.axis = np.array([[0.5]*20] * self.num_axis)
+        print(self.axis)
 
         self.pca = PCA(self.num_axis)
 

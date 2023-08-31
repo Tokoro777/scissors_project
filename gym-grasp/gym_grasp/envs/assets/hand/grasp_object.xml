@@ -68,7 +68,7 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
             <site name="box:center" pos="0 0 0" rgba="1 0 0 0" size="0.01 0.01 0.01"></site>
             <joint name="box:joint" type="free" damping="0.01"></joint>
         </body>
-        <body name="target" pos="1 0.87 0.4">
+        <body name="target" pos="0.8 1 0.5">
             <geom name="target" type="sphere" size="0.005 0.005 0.005" condim="4" group="2"
                   contype="0" conaffinity="0" rgba="0.9 0.9 0.1 1"></geom>
             <site name="target:center" pos="0 0 0" rgba="1 0 0 0" size="0.01 0.01 0.01"></site>
@@ -117,6 +117,32 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
             <joint name="teacup:joint" type="free" damping="0.01"></joint>
         </body>
 
+<!--　はさみ　-->
+<!--        <body name="Scissors_half_1" pos="0.8 1 0.5">-->
+<!--            <geom name="Scissors_half_1:C_target" friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half"-->
+<!--                  euler="0 0 1.57" ></geom>-->
+<!--            <joint name="Scissors_half_1:joint" type="free" damping="0.01"></joint>-->
+<!--        </body>-->
+
+<!--        <body name="Scissors_half_2" pos="0.8 1 0.5">-->
+<!--            <geom name="Scissors_half_2:C_target" friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half"-->
+<!--                  euler="0 3.1415 1.57" ></geom>-->
+<!--            <joint name="Scissors_half_2:joint" type="free" damping="0.01"></joint>-->
+<!--        </body>-->
+
+
+<!--  はさみ  -->
+        <!-- 1番目 -->
+        <body pos="0.8 1 0.5">
+            <geom friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half" euler="0 0 3.1415"></geom>
+            <!-- 2番目 -->
+            <body pos="0 0 0">
+                <joint name="scissors_hinge:joint" type="hinge" axis="0 0 1"/>
+                <geom friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half" euler="0 3.1415 0"></geom>
+            </body>
+        </body>
+
+
         <light directional="true" ambient="0.2 0.2 0.2" diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" castshadow="false"
                pos="0 1 4" dir="0 0 -1" name="light0"></light>
     </worldbody>
@@ -145,7 +171,9 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
         <position name="robot0:A_zslider" joint="robot0:zslider" ctrlrange="0.2 0.8" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>
 <!--        <position name="robot0:A_xslider" joint="robot0:xslider" ctrlrange="-0.15 0.15" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
 <!--        <position name="robot0:A_yslider" joint="robot0:yslider" ctrlrange="-0.15 0.15" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
-
 <!--        <position name="robot0:A_rollhinge" joint="robot0:rollhinge" ctrlrange="0 3.14" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
+
+<!--  はさみ  -->
+<!--        <position name="Scissors:rotate" joint="Scissors:joint" ctrlrange="-1 0" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
     </actuator>
 </mujoco>

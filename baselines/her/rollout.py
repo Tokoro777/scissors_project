@@ -85,8 +85,8 @@ class RolloutWorker:
         """
         obs = self.envs[i].reset()
         self.initial_o[i] = obs['observation']
-        self.initial_ag[i] = obs['achieved_goal']
-        self.g[i] = obs['desired_goal']
+        self.initial_ag[i] = obs['achieved_angle']
+        self.g[i] = obs['desired_angle']
 
     def reset_all_rollouts(self):
         """Resets all `rollout_batch_size` rollout workers.
@@ -94,8 +94,8 @@ class RolloutWorker:
         for i in range(self.rollout_batch_size):
             self.reset_rollout(i)
 
-    def generate_rollouts(self, min_num, num_axis, reward_lambda, pos_database, is_train=True,
-                          success_type='Sequence', synergy_type='actuator'):
+    def generate_rollouts(self, min_num, num_axis, reward_lambda, synergy, is_train=True,
+                          success_type='Last', synergy_type='actuator'):
         """Performs `rollout_batch_size` rollouts in parallel for time horizon `T` with the current
         policy acting on it accordingly.
         """
@@ -151,6 +151,7 @@ class RolloutWorker:
                 try:
                     # We fully ignore the reward here because it will have to be re-computed
                     # for HER.
+                    self.envs[i].set_synergy(synergy)
                     curr_o_new, _, _, info = self.envs[i].step(u[i])
 
                     pos = None
@@ -172,15 +173,15 @@ class RolloutWorker:
                         if success_type == 'Sequence':
                             # 一定時間（dtime），成功判定が継続した場合，把持姿勢を追加
                             if dtime[i] >= 5:
-                                pos_database.add_pos(pos)
+                                synergy.add_pos(pos)
                                 dtime[i] = 0
                         elif success_type == 'Last':
                             # 学習の最後5stepで成功した場合のみver
                             if success[i] > 0 and t > self.T*0.95:
-                                pos_database.add_pos(pos)
+                                synergy.add_pos(pos)
 
                     o_new[i] = curr_o_new['observation']
-                    ag_new[i] = curr_o_new['achieved_goal']
+                    ag_new[i] = curr_o_new['achieved_angle']
                     for idx, key in enumerate(self.info_keys):
                         info_values[idx][t, i] = info[key]
                     if self.render:
@@ -210,7 +211,7 @@ class RolloutWorker:
         if synergy_type == 'actuator':
             poss = np.array(acts)[:, :, 0:20]
         elif synergy_type == 'joint':
-            poss = np.array(obs)[:, :, 5:27]
+            poss = np.array(obs)[:, :, 4:26]
 
         if is_train:
             episode = dict(o=obs,

@@ -189,7 +189,7 @@ def configure_dims(params):
     dims = {
         'o': obs['observation'].shape[0],
         'u': env.action_space.shape[0],
-        'g': obs['desired_goal'].shape[0],
+        'g': obs['desired_angle'],
         'pos': pos_dim.shape[0]
     }
     clogger.info("input_dims = {}".format(dims))
