@@ -43,7 +43,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self, model_path, target_position, target_rotation,
             target_position_range, reward_type, initial_qpos={},
             randomize_initial_position=False, randomize_initial_rotation=False, randomize_object=False,
-            distance_threshold=0.01, rotation_threshold=0.1, angle_threshold=0.1, n_substeps=20, relative_control=False,
+            distance_threshold=0.01, rotation_threshold=0.1, angle_threshold=0.5, n_substeps=20, relative_control=False,
             ignore_z_target_rotation=False,
             target_id=0, num_axis=5, reward_lambda=0.5, desired_angle=1
     ):     # 回転角度の誤差の閾値をとりあえず0.1(約5.73度)に設定。
@@ -105,7 +105,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self.object = self.object_list[self.target_id]  # target
 
         self.step_n = 0
-        self.init_object_qpos = np.array([1, 0.87, 0.4, 1, 0, 0, 0])
+        self.init_object_qpos = np.array([1, 0.87, 0.3, 1, 0, 0, 0])
 
         assert self.target_position in ['ignore', 'fixed', 'random']
         assert self.target_rotation in ['ignore', 'fixed', 'xyz', 'z', 'parallel']
@@ -137,8 +137,9 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # はさみのジョイントの位置を取得
         hinge_joint_index = self.sim.model.joint_name2id(hinge_joint_name)
         hinge_joint_angle = self.sim.data.qpos[hinge_joint_index]
-        print("ジョイント", hinge_joint_name, "の角度:", hinge_joint_angle)
+        # print("ジョイント", hinge_joint_name, "の角度:", hinge_joint_angle)
         return hinge_joint_angle
+
 
     # def _randamize_target(self):
     #     self.sim.data.set_joint_qpos("target0:joint", [1, 0.87, 0.4, 1, 0, 0, 0])
@@ -195,7 +196,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
             reward = (success - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
 
-            print("報酬:", reward)
+            # print("reward shape:", reward.shape)
 
             return reward
 
@@ -211,8 +212,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _is_success_angle(self, achieved_angle, desired_angle, isingrasp):
         d_angle = desired_angle - achieved_angle
-        achieved_angle = (d_angle < self.angle_threshold).astype(np.float32)
-        achieved_both = achieved_angle * isingrasp
+        # print("d_angle:", d_angle)
+        # achieved_angle = ((d_angle < self.angle_threshold) & (d_angle > 0)).astype(np.float32)
+        achieved_angle = (achieved_angle < 0).astype(np.float32)
+        achieved_both = achieved_angle.flatten() * isingrasp
         return achieved_both
 
     def _env_setup(self, initial_qpos):
@@ -273,6 +276,8 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
         self.sim.data.set_joint_qpos("scissors_hinge:joint", 0)  # はさみの回転角度を0にリセットする
+        # self.angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
+        # print("角度は", self.angle)
         self.step_n = 0
 
         def is_on_palm():
@@ -338,13 +343,13 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _render_callback(self):
         # Assign current state to target object but offset a bit so that the actual object
         # is not obscured.
-        goal = self.goal.copy()
-        assert goal.shape == (7,)
-        if self.target_position == 'ignore':
-            # Move the object to the side since we do not care about it's position.
-            goal[0] += 0.15
-        self.sim.data.set_joint_qpos('target:joint', goal)
-        self.sim.data.set_joint_qvel('target:joint', np.zeros(6))
+        # goal = self.goal.copy()　　# goalは今は使っていないのでコメントアウト
+        # assert goal.shape == (7,)
+        # if self.target_position == 'ignore':
+        #     # Move the object to the side since we do not care about it's position.
+        #     goal[0] += 0.15
+        # self.sim.data.set_joint_qpos('target:joint', goal)
+        # self.sim.data.set_joint_qvel('target:joint', np.zeros(6))
 
         if 'object_hidden' in self.sim.model.geom_names:
             hidden_id = self.sim.model.geom_name2id('object_hidden')
@@ -371,7 +376,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         return {
             'observation': observation.copy(),
             'achieved_angle': achieved_angle.copy(),
-            'desired_angle': self.desired_angle,      # いったん目標回転角度を90度に設定。π/2
+            'desired_angle': self.desired_angle,      # いったん目標回転角度を1(約57度)に。
         }
 
     def _get_grasp_center_space(self, radius=0.07):
