@@ -131,13 +131,9 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         return object_qpos
 
     def _get_achieved_angle(self):
-        # はさみの回転角度
-        # ジョイント名を指定
-        hinge_joint_name = "scissors_hinge:joint"
-        # はさみのジョイントの位置を取得
-        hinge_joint_index = self.sim.model.joint_name2id(hinge_joint_name)
-        hinge_joint_angle = self.sim.data.qpos[hinge_joint_index]
-        # print("ジョイント", hinge_joint_name, "の角度:", hinge_joint_angle)
+        # はさみの回転角度の取得
+        hinge_joint_angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")
+        # print("ジョイントの角度:", hinge_joint_angle)
         return hinge_joint_angle
 
 
@@ -212,10 +208,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _is_success_angle(self, achieved_angle, desired_angle, isingrasp):
         d_angle = desired_angle - achieved_angle
-        # print("d_angle:", d_angle)
+        # print("achieved_angle(真値):", achieved_angle)
         # achieved_angle = ((d_angle < self.angle_threshold) & (d_angle > 0)).astype(np.float32)
-        achieved_angle = (achieved_angle < 0).astype(np.float32)
-        achieved_both = achieved_angle.flatten() * isingrasp
+        achieved_angle_0or1 = (achieved_angle < 0).astype(np.float32)
+        achieved_both = achieved_angle_0or1.flatten() * isingrasp
         return achieved_both
 
     def _env_setup(self, initial_qpos):

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco>
+    <compiler angle="radian" coordinate="local" meshdir="../stls" texturedir="../textures"></compiler>
+    <option timestep="0.002" iterations="20" apirate="200">
+        <flag warmstart="enable"></flag>
+    </option>
+
+    <include file="shared.xml"></include>
+
+    <asset>
+        <include file="shared_asset.xml"></include>
+
+        <texture name="texture:object" file="block.png" gridsize="3 4" gridlayout=".U..LFRB.D.."></texture>
+        <texture name="texture:hidden" file="block_hidden.png" gridsize="3 4" gridlayout=".U..LFRB.D.."></texture>
+
+        <material name="material:object" texture="texture:object" specular="1" shininess="0.3" reflectance="0"></material>
+        <material name="material:hidden" texture="texture:hidden" specular="1" shininess="0.3" reflectance="0"></material>
+        <material name="material:target" texture="texture:object" specular="1" shininess="0.3" reflectance="0" rgba="1 1 1 0.5"></material>
+    </asset>
+
+    <worldbody>
+        <geom name="floor0" pos="1 1 0" size="1 1 1" type="plane" condim="3" material="floor_mat"></geom>
+        <body name="floor0" pos="1 1 0"></body>
+
+        <include file="robot_for_test.xml"></include>
+
+        <light directional="true" ambient="0.2 0.2 0.2" diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" castshadow="false" pos="0 1 4" dir="0 0 -1" name="light0"></light>
+    </worldbody>
+
+    <actuator>
+        <position name="robot0:A_slider" joint="robot0:slider" ctrlrange="-0.6 0.8" ctrllimited="true" kp="7"/>
+    </actuator>
+</mujoco>
