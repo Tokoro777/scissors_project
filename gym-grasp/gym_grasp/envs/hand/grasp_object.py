@@ -105,7 +105,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self.object = self.object_list[self.target_id]  # target
 
         self.step_n = 0
-        self.init_object_qpos = np.array([1, 0.87, 0.3, 1, 0, 0, 0])
+        self.init_object_qpos = np.array([1, 0.87, 0.3, 1, 0, 0, 0])  # 今のコードでは使っていない
 
         assert self.target_position in ['ignore', 'fixed', 'random']
         assert self.target_rotation in ['ignore', 'fixed', 'xyz', 'z', 'parallel']
@@ -133,7 +133,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _get_achieved_angle(self):
         # はさみの回転角度の取得
         hinge_joint_angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")
-        # print("ジョイントの角度:", hinge_joint_angle)
+        print("ジョイントの角度:", hinge_joint_angle)
         return hinge_joint_angle
 
 
@@ -177,7 +177,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def compute_reward(self, achieved_angle, desired_angle, info):
         if self.reward_type == 'sparse':
             gpenalty = info["is_in_grasp_space"].T[0]
-            success = self._is_success_angle(achieved_angle, desired_angle, gpenalty).astype(np.float32)
+            success = self._is_success_angle(achieved_angle, desired_angle).astype(np.float32)
             return success - 1.
         else:
             # Train時のみ処理されるように
@@ -186,13 +186,11 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
             c_lambda = info['lambda']
             gpenalty = info["is_in_grasp_space"].T[0]
-            success = self._is_success_angle(achieved_angle, desired_angle, gpenalty).astype(np.float32)  # 成否（1,0）を取得する
+            success = self._is_success_angle(achieved_angle, desired_angle).astype(np.float32)  # 成否（1,0）を取得する
             cpenalty = info["contact_penalty"].T[0]
-            success = success * gpenalty
+            # success = success * gpenalty
 
             reward = (success - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
-
-            # print("reward shape:", reward.shape)
 
             return reward
 
@@ -206,12 +204,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         achieved_both = achieved_pos * achieved_rot * isingrasp
         return achieved_both
 
-    def _is_success_angle(self, achieved_angle, desired_angle, isingrasp):
+    def _is_success_angle(self, achieved_angle, desired_angle):
         d_angle = desired_angle - achieved_angle
-        # print("achieved_angle(真値):", achieved_angle)
-        # achieved_angle = ((d_angle < self.angle_threshold) & (d_angle > 0)).astype(np.float32)
-        achieved_angle_0or1 = (achieved_angle < 0).astype(np.float32)
-        achieved_both = achieved_angle_0or1.flatten() * isingrasp
+        achieved_angle_0or1 = (achieved_angle < -0.1).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
+        achieved_both = achieved_angle_0or1.flatten()
         return achieved_both
 
     def _env_setup(self, initial_qpos):
@@ -271,9 +267,9 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos("scissors_hinge:joint", 0)  # はさみの回転角度を0にリセットする
-        # self.angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
-        # print("角度は", self.angle)
+        self.sim.data.set_joint_qpos("scissors_hinge:joint", 0)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
+        # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
+        # print("角度は", angle)
         self.step_n = 0
 
         def is_on_palm():
@@ -476,7 +472,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         done = False
 
         info = {
-            'is_success': self._is_success_angle(obs['achieved_angle'], self.desired_angle, 1.0 if self._is_in_grasp_space() else 0.0),
+            'is_success': self._is_success_angle(obs['achieved_angle'], self.desired_angle),
             "contact_penalty": self._check_contact(),
             "is_in_grasp_space": 1.0 if self._is_in_grasp_space() else 0.0
         }
