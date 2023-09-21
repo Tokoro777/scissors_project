@@ -132,8 +132,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _get_achieved_angle(self):
         # はさみの回転角度の取得
-        hinge_joint_angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")
-        print("ジョイントの角度:", hinge_joint_angle)
+        hinge_joint_angle_2 = self.sim.data.get_joint_qpos("scissors_hinge_2:joint")  # 正の値(はさみが開く場合の時)
+        hinge_joint_angle_1 = self.sim.data.get_joint_qpos("scissors_hinge_1:joint")  # 負の値
+        hinge_joint_angle = hinge_joint_angle_2 - hinge_joint_angle_1  # 正 - 負 で 正になるはず
+        print("はさみの回転角度:", hinge_joint_angle)
         return hinge_joint_angle
 
 
@@ -206,7 +208,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _is_success_angle(self, achieved_angle, desired_angle):
         d_angle = desired_angle - achieved_angle
-        achieved_angle_0or1 = (achieved_angle < -0.1).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
+        achieved_angle_0or1 = ((achieved_angle > 1.57) & (achieved_angle < 3.14)).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
         achieved_both = achieved_angle_0or1.flatten()
         return achieved_both
 
@@ -267,7 +269,8 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos("scissors_hinge:joint", 0)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
+        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
+        self.sim.data.set_joint_qpos("scissors_hinge_1:joint", 0)
         # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
         # print("角度は", angle)
         self.step_n = 0
