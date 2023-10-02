@@ -77,6 +77,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             num_axis (int): the number of components
             reward_lambda (float) : a weight for the second term of the reward function
         """
+
         self.target_position = target_position
         self.target_rotation = target_rotation
         self.target_position_range = target_position_range
@@ -134,8 +135,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # はさみの回転角度の取得
         hinge_joint_angle_2 = self.sim.data.get_joint_qpos("scissors_hinge_2:joint")  # 正の値(はさみが開く場合の時)
         hinge_joint_angle_1 = self.sim.data.get_joint_qpos("scissors_hinge_1:joint")  # 負の値
+        # print("はさみの回転角度_2:", hinge_joint_angle_2)
+        # print("はさみの回転角度_1:", hinge_joint_angle_1)
         hinge_joint_angle = hinge_joint_angle_2 - hinge_joint_angle_1  # 正 - 負 で 正になるはず
-        print("はさみの回転角度:", hinge_joint_angle)
+        # print("はさみの回転角度:", hinge_joint_angle)
         return hinge_joint_angle
 
 
@@ -206,11 +209,28 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         achieved_both = achieved_pos * achieved_rot * isingrasp
         return achieved_both
 
+    # def _is_success_angle(self, achieved_angle, desired_angle):
+    #     d_angle = desired_angle - achieved_angle
+    #     achieved_angle_0or1 = (achieved_angle < 0.5).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
+    #     print("achieved_angle_0or1", achieved_angle_0or1)
+    #     achieved_both = achieved_angle_0or1.flatten()
+    #     return achieved_both
+
     def _is_success_angle(self, achieved_angle, desired_angle):
         d_angle = desired_angle - achieved_angle
-        achieved_angle_0or1 = ((achieved_angle > 1.57) & (achieved_angle < 3.14)).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
-        achieved_both = achieved_angle_0or1.flatten()
-        return achieved_both
+        print("achieved_angle:", achieved_angle)
+
+        success_or_failure = np.zeros(256, dtype=np.float32)  # 初期化
+        success_or_failure_0or1 = None  # 初期化
+
+        if self.pre_achieved_angle != None:
+            success_or_failure_0or1 = (((self.pre_achieved_angle > 0.27) and (achieved_angle < 0.27) and (achieved_angle > 0)) or ((self.pre_achieved_angle < 0.27) and (self.pre_achieved_angle > 0) and (achieved_angle > 0.27))).astype(np.float32)
+            success_or_failure = success_or_failure_0or1.flatten()
+
+        self.pre_achieved_angle = achieved_angle  # pre_achieved_angleを更新
+        print("success_or_failure_0or1", success_or_failure_0or1)
+        print("success_or_failure", success_or_failure)
+        return success_or_failure
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
@@ -269,10 +289,15 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
-        self.sim.data.set_joint_qpos("scissors_hinge_1:joint", 0)
+        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0.52358)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
+        self.sim.data.set_joint_qpos("scissors_hinge_1:joint", -0.52358)
         # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
         # print("角度は", angle)
+
+        # 現在のrobot0:z_sliderの位置を取得
+        current_position = self.sim.data.get_joint_qpos("robot0:zslider")
+        self.sim.data.set_joint_qpos("robot0:zslider", current_position - 0.1)  # ハンドを下に0.1移動
+
         self.step_n = 0
 
         def is_on_palm():
@@ -530,6 +555,7 @@ class GraspObjectEnv(ManipulateEnv):
             rotation_threshold=100.0,
             randomize_object=False, target_id=0, num_axis=5, reward_lambda=0.4
         )
+        self.pre_achieved_angle = None  # pre_stateを初期化
 
 
 '''
