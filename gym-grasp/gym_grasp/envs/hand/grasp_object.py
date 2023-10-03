@@ -218,18 +218,29 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
     def _is_success_angle(self, achieved_angle, desired_angle):
         d_angle = desired_angle - achieved_angle
-        print("achieved_angle:", achieved_angle)
+        # print("achieved_angle:", achieved_angle)
 
-        success_or_failure = np.zeros(256, dtype=np.float32)  # 初期化
-        success_or_failure_0or1 = None  # 初期化
+        if self.pre_achieved_angle is None or self.pre_achieved_angle.shape != achieved_angle.shape:
+            # 初回の呼び出し時に初期化し、形状を achieved_angle に合わせる
+            self.pre_achieved_angle = np.zeros_like(achieved_angle)
 
-        if self.pre_achieved_angle != None:
-            success_or_failure_0or1 = (((self.pre_achieved_angle > 0.27) and (achieved_angle < 0.27) and (achieved_angle > 0)) or ((self.pre_achieved_angle < 0.27) and (self.pre_achieved_angle > 0) and (achieved_angle > 0.27))).astype(np.float32)
-            success_or_failure = success_or_failure_0or1.flatten()
+        # success_or_failure_0or1 の計算
+        success_or_failure_0or1 = (
+                ((self.pre_achieved_angle >= 0.2) & (achieved_angle > 0) & (achieved_angle < 0.2)) |
+                ((self.pre_achieved_angle > 0) & (self.pre_achieved_angle < 0.2) & (achieved_angle >= 0.2))
+        ).astype(np.float32)
 
-        self.pre_achieved_angle = achieved_angle  # pre_achieved_angleを更新
-        print("success_or_failure_0or1", success_or_failure_0or1)
-        print("success_or_failure", success_or_failure)
+        # success_or_failure を1次元配列に変形
+        success_or_failure = success_or_failure_0or1.flatten()
+
+        # pre_achieved_angle を更新
+        self.pre_achieved_angle = achieved_angle.copy()
+
+        # print("success_or_failure_0or1", success_or_failure_0or1)
+        # print("success_or_failure_0or1.shape", success_or_failure_0or1.shape)
+        # print("success_or_failure", success_or_failure)
+        # print("success_or_failure.shape", success_or_failure.shape)
+
         return success_or_failure
 
     def _env_setup(self, initial_qpos):
@@ -289,7 +300,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0.52358)  # はさみの回転角度を0にリセットする(しかしなぜか0にならないので, -0.15にするといい感じに0に調整できた)
+        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0.52358)  # はさみの回転角度の初期化
         self.sim.data.set_joint_qpos("scissors_hinge_1:joint", -0.52358)
         # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
         # print("角度は", angle)

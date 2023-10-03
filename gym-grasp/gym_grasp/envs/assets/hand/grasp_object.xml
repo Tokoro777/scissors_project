@@ -132,14 +132,14 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
 
 <!--        1.06 0.82 0.305    1.055 0.82 0.305-->
         <body pos="1.07 0.85 0.207">
-<!--			<inertial diaginertia="1 1 1" mass="1" pos="0 0 0"></inertial>-->
+<!--			<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>-->
 			<body name="scissors_1" pos="0 0 0">
-<!--				<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>-->
-                <joint name="scissors_hinge_1:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-1.57 0" damping="0.5" armature="0.01"></joint>
+				<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>
+                <joint name="scissors_hinge_1:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="false" range="-1.57 0" damping="1" armature="0.01"></joint>
 				<geom friction="1.5 0.005 0.001" type="mesh" mesh="target0:Scissors_half" euler="0 3.1415 0" mass="100"></geom>
 				<body name="scissors_2" pos="0 0 0">
-<!--					<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>-->
-                    <joint name="scissors_hinge_2:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="0 1.57" damping="0.5" armature="0.01"></joint>
+					<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>
+                    <joint name="scissors_hinge_2:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="false" range="0 1.57" damping="1" armature="0.01"></joint>
 					<geom friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half" euler="0 0 3.14159" mass="100"></geom>
 				</body>
 			</body>
