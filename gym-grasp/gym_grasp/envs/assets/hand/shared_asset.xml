@@ -72,5 +72,5 @@
     <mesh name="target0:Stapler" file="target/Stapler.stl"/>
     <mesh name="target0:Teacup" file="target/Teacup.stl"/>
     <mesh name="target0:Wrench" file="target/Wrench.stl"/>
-    <mesh name="target0:Scissors_half" scale="0.0015 0.0015 0.0015" file="target/Scissors_half_big_space_7.stl"/>
+    <mesh name="target0:Scissors_half" scale="0.0015 0.0015 0.0015" file="target/Scissors_half_thick_new.stl"/>
 </mujoco>

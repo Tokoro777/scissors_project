@@ -194,26 +194,20 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             success = self._is_success_angle(achieved_angle, desired_angle).astype(np.float32)  # 成否（1,0）を取得する
             cpenalty = info["contact_penalty"].T[0]
             # success = success * gpenalty
+            hand_penalty = info["hand_penalty"].T[0]
 
-            reward = (success - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
+            reward = (success - 1.) + (hand_penalty - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
 
             return reward
 
     # RobotEnv methods
     # ----------------------------
 
-    def _is_success(self, achieved_goal, desired_goal, isingrasp):
-        d_pos, d_rot = self._goal_distance(achieved_goal, desired_goal)
-        achieved_pos = (d_pos < self.distance_threshold).astype(np.float32)
-        achieved_rot = (d_rot < self.rotation_threshold).astype(np.float32)
-        achieved_both = achieved_pos * achieved_rot * isingrasp
-        return achieved_both
-
-    # def _is_success_angle(self, achieved_angle, desired_angle):
-    #     d_angle = desired_angle - achieved_angle
-    #     achieved_angle_0or1 = (achieved_angle < 0.5).astype(np.float32)  # 想定される動作は, 回転角度が負なので, <0に設定
-    #     print("achieved_angle_0or1", achieved_angle_0or1)
-    #     achieved_both = achieved_angle_0or1.flatten()
+    # def _is_success(self, achieved_goal, desired_goal, isingrasp):
+    #     d_pos, d_rot = self._goal_distance(achieved_goal, desired_goal)
+    #     achieved_pos = (d_pos < self.distance_threshold).astype(np.float32)
+    #     achieved_rot = (d_rot < self.rotation_threshold).astype(np.float32)
+    #     achieved_both = achieved_pos * achieved_rot * isingrasp
     #     return achieved_both
 
     def _is_success_angle(self, achieved_angle, desired_angle):
@@ -236,12 +230,27 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # pre_achieved_angle を更新
         self.pre_achieved_angle = achieved_angle.copy()
 
-        # print("success_or_failure_0or1", success_or_failure_0or1)
-        # print("success_or_failure_0or1.shape", success_or_failure_0or1.shape)
-        # print("success_or_failure", success_or_failure)
-        # print("success_or_failure.shape", success_or_failure.shape)
+        # # handがはさみの位置近く
+        # # 現在のrobot0:z_sliderの位置を取得
+        # current_position = self.sim.data.get_joint_qpos("robot0:zslider")
+        # # print("current_position", current_position)
+        # if current_position < 0:
+        #     success_or_failure *= 1
+        # else:
+        #     success_or_failure *= 0
 
         return success_or_failure
+
+    def _hand_penalty(self, success):
+        # handがはさみの位置近く
+        # 現在のrobot0:z_sliderの位置を取得
+        current_position = self.sim.data.get_joint_qpos("robot0:zslider")
+        # print("current_position", current_position)
+        if current_position < 0:
+            hand_penalty = success * 1
+        else:
+            hand_penalty = success * 0
+        return hand_penalty
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
@@ -300,8 +309,8 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_quat /= np.linalg.norm(initial_quat)
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
-        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 0.52358)  # はさみの回転角度の初期化
-        self.sim.data.set_joint_qpos("scissors_hinge_1:joint", -0.52358)
+        self.sim.data.set_joint_qpos("scissors_hinge_1:joint", -0.52358)  # はさみの回転角度の初期化
+        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 1.02358)
         # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
         # print("角度は", angle)
 
@@ -313,10 +322,15 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         def is_on_palm():
             self.sim.forward()
-            cube_middle_idx = self.sim.model.site_name2id('object:center')
-            # cube_middle_idx = self.object
-            cube_middle_pos = self.sim.data.site_xpos[cube_middle_idx]
-            is_on_palm = (cube_middle_pos[2] > 0.04)
+            # cube_middle_idx = self.sim.model.site_name2id('object:center')
+            # # cube_middle_idx = self.object
+            # cube_middle_pos = self.sim.data.site_xpos[cube_middle_idx]
+            # is_on_palm = (cube_middle_pos[2] > 0.04)
+
+            # 現在のrobot0:z_sliderの位置を取得
+            current_position = self.sim.data.get_joint_qpos("robot0:zslider")
+            is_on_palm = ((current_position > -0.2) & (current_position < -0.04))
+
             return is_on_palm
 
         # Run the simulation for a bunch of timesteps to let everything settle in.
@@ -512,6 +526,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         info = {
             'is_success': self._is_success_angle(obs['achieved_angle'], self.desired_angle),
+            "hand_penalty" : self._hand_penalty(self._is_success_angle(obs['achieved_angle'], self.desired_angle)),
             "contact_penalty": self._check_contact(),
             "is_in_grasp_space": 1.0 if self._is_in_grasp_space() else 0.0
         }
