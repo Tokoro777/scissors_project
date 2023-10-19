@@ -131,7 +131,7 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
 
 
 <!--        1.06 0.82 0.305    1.055 0.82 0.305-->
-        <body pos="1.06 0.84 0.206">
+        <body pos="1.06 0.845 0.206">
 <!--			<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>-->
 			<body name="scissors_1" pos="0 0 0">
 				<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>
@@ -174,12 +174,9 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
     </sensor>
 
     <actuator>
-        <position name="robot0:A_zslider" joint="robot0:zslider" ctrlrange="0.2 0.8" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>
+        <position name="robot0:A_zslider" joint="robot0:zslider" ctrlrange="0.2 0.8" ctrllimited="true" kp="1" forcerange="-4.785 4.785"></position>
 <!--        <position name="robot0:A_xslider" joint="robot0:xslider" ctrlrange="-0.15 0.15" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
 <!--        <position name="robot0:A_yslider" joint="robot0:yslider" ctrlrange="-0.15 0.15" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
 <!--        <position name="robot0:A_rollhinge" joint="robot0:rollhinge" ctrlrange="0 3.14" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
-
-<!--  はさみ  -->
-<!--        <position name="Scissors:rotate" joint="Scissors:joint" ctrlrange="-1 0" ctrllimited="true" kp="1" forcerange="-4.785 4.785"/>-->
     </actuator>
 </mujoco>

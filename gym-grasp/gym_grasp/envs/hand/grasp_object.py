@@ -45,7 +45,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             randomize_initial_position=False, randomize_initial_rotation=False, randomize_object=False,
             distance_threshold=0.01, rotation_threshold=0.1, angle_threshold=0.5, n_substeps=20, relative_control=False,
             ignore_z_target_rotation=False,
-            target_id=0, num_axis=5, reward_lambda=0.5, desired_angle=1, scissors_z_position=-0.058  # ここ修正必要(0.206だとハンドとはさみの距離を表しにくい)！！！！
+            target_id=0, num_axis=5, reward_lambda=0.5, desired_angle=1, scissors_z_position=0.206  # ここ修正必要(0.206だとハンドとはさみの距離を表しにくい)！！！！
     ):     # 回転角度の誤差の閾値をとりあえず0.1(約5.73度)に設定。
         # 整数にする必要があるため(tensorflowのinit的に)、目標角度は1.0(約57度)にする。←いったん目標回転角度を90度に設定。π/2
         """Initializes a new Hand manipulation environment.
@@ -142,10 +142,11 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # print("はさみの回転角度:", hinge_joint_angle)
         return hinge_joint_angle
 
-    def _get_zslider(self):
-        # zsliderの大きさ(高さ)の取得
-        zslider = self.sim.data.get_joint_qpos("robot0:zslider")
-        return zslider
+    def _get_palm(self):
+        # palmの大きさ(高さ)の取得
+        pospalm = self.sim.data.site_xpos[self.sim.model.site_name2id("robot0:Tch_palm")]
+        palm = pospalm[2]
+        return palm
 
     # def _randamize_target(self):
     #     self.sim.data.set_joint_qpos("target0:joint", [1, 0.87, 0.4, 1, 0, 0, 0])
@@ -197,13 +198,18 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             c_lambda = info['lambda']
             gpenalty = info["is_in_grasp_space"].T[0]
             success = self._is_success_angle(achieved_angle, desired_angle).astype(np.float32)  # 成否（1,0）を取得する
-            # print("success.shape", success.shape)
             cpenalty = info["contact_penalty"].T[0]
             # success = success * gpenalty
 
-            # print("info['distance_zslider_scissors']", info['distance_zslider_scissors'])
-            if all(info["distance_zslider_scissors"][i].T[0] <= 0.06 for i in range(200)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
-                success += 1
+            # print("info['distance_palm_scissors']", info['distance_palm_scissors'])
+            if (info["distance_palm_scissors"].shape == (256,1)):
+                if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(256)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
+                    success += 1.
+            elif (info["distance_palm_scissors"].shape == (200,1)):
+                if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(200)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
+                    success += 1.
+            else:
+                print("info['distance_palm_scissors'].shape is not correct!!! :", info['distance_palm_scissors'].shape)
 
             # print("success.shape", success.shape)
             # print("success", success)
@@ -255,8 +261,8 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         return success_or_failure
 
-    def _get_distance(self, zslider, scissors_z_position):
-        distance = zslider - scissors_z_position
+    def _get_distance(self, palm, scissors_z_position):
+        distance = palm - scissors_z_position
         abs_distance = abs(distance)
         return abs_distance
 
@@ -353,15 +359,10 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         def is_on_palm():
             self.sim.forward()
-            # cube_middle_idx = self.sim.model.site_name2id('object:center')
-            # # cube_middle_idx = self.object
-            # cube_middle_pos = self.sim.data.site_xpos[cube_middle_idx]
-            # is_on_palm = (cube_middle_pos[2] > 0.04)
-
-            # 現在のrobot0:z_sliderの位置を取得
-            current_position = self.sim.data.get_joint_qpos("robot0:zslider")
-            is_on_palm = ((current_position > -0.2) & (current_position < -0.04))
-
+            cube_middle_idx = self.sim.model.site_name2id('object:center')
+            # cube_middle_idx = self.object
+            cube_middle_pos = self.sim.data.site_xpos[cube_middle_idx]
+            is_on_palm = (cube_middle_pos[2] > 0.04)
             return is_on_palm
 
         # Run the simulation for a bunch of timesteps to let everything settle in.
@@ -443,10 +444,11 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # object_qvel = self.sim.data.get_joint_qvel(self.object)  # オブジェクトの速度はいらない？？
         # achieved_goal = self._get_achieved_goal().ravel()  # this contains the object position + rotation
         achieved_angle = self._get_achieved_angle().ravel()  # 回転角度は1つ
-        zslider = self._get_zslider().ravel()
+        palm = self._get_palm().ravel()
+        print("palm", palm)
         sensordata = self._get_contact_forces()
 
-        observation = np.concatenate([robot_qpos, robot_qvel, achieved_angle, zslider, sensordata])
+        observation = np.concatenate([robot_qpos, robot_qvel, achieved_angle, palm, sensordata])
         # observation = np.concatenate([robot_qpos, robot_qvel, object_qvel, achieved_goal, [self.target_id]])
         # observation = np.concatenate([robot_qpos, robot_qvel, object_qvel, achieved_goal]) # temp
 
@@ -454,7 +456,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             'observation': observation.copy(),
             'achieved_angle': achieved_angle.copy(),
             'desired_angle': self.desired_angle,      # いったん目標回転角度を1(約57度)に。
-            'zslider': zslider
+            'palm': palm
         }
 
     def _get_grasp_center_space(self, radius=0.07):
@@ -559,14 +561,12 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
         info = {
             'is_success': self._is_success_angle(obs['achieved_angle'], self.desired_angle),
-            "distance_zslider_scissors": self._get_distance(obs['zslider'], self.scissors_z_position),
+            "distance_palm_scissors": self._get_distance(obs['palm'], self.scissors_z_position),
             "contact_penalty": self._check_contact(),
             "is_in_grasp_space": 1.0 if self._is_in_grasp_space() else 0.0
         }
-        # print("info['distance_zslider_scissors']", info['distance_zslider_scissors'])
+        # print("info['distance_palm_scissors']", info['distance_palm_scissors'])
         reward = self.compute_reward(obs['achieved_angle'], self.desired_angle, info)
-
-        print("reward", reward)
 
         # if self.step_n < 20:           # オブジェクト(はさみ)ははじめから固定されているので、初期位置にセットする必要はなし
         #     self.sim.data.set_joint_qpos(self.object, self.initial_qpos)
