@@ -107,7 +107,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self.object = self.object_list[self.target_id]  # target
 
         self.step_n = 0
-        self.init_object_qpos = np.array([1, 0.87, 0.3, 1, 0, 0, 0])  # 今のコードでは使っていない
+        self.init_object_qpos = np.array([1.06, 0.845, 0.256, 1, 0, 0, 0])  # z座標のみ使用
 
         assert self.target_position in ['ignore', 'fixed', 'random']
         assert self.target_rotation in ['ignore', 'fixed', 'xyz', 'z', 'parallel']
@@ -197,24 +197,22 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
             c_lambda = info['lambda']
             gpenalty = info["is_in_grasp_space"].T[0]
+            # print("gpenalty", gpenalty)
             success = self._is_success_angle(achieved_angle, desired_angle).astype(np.float32)  # 成否（1,0）を取得する
             cpenalty = info["contact_penalty"].T[0]
             # success = success * gpenalty
 
             # print("info['distance_palm_scissors']", info['distance_palm_scissors'])
-            if (info["distance_palm_scissors"].shape == (256,1)):
-                if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(256)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
-                    success += 1.
-            elif (info["distance_palm_scissors"].shape == (200,1)):
-                if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(200)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
-                    success += 1.
-            else:
-                print("info['distance_palm_scissors'].shape is not correct!!! :", info['distance_palm_scissors'].shape)
+            # if (info["distance_palm_scissors"].shape == (256,1)):
+            #     if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(256)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
+            #         success += 1.
+            # elif (info["distance_palm_scissors"].shape == (200,1)):
+            #     if all(info["distance_palm_scissors"][i].T[0] <= 0.08 for i in range(200)):  # 広めにしてる. 0.058でもいいけど、ハンドとはさみの間の距離を表している
+            #         success += 1.
+            # else:
+            #     print("info['distance_palm_scissors'].shape is not correct!!! :", info['distance_palm_scissors'].shape)
 
-            # print("success.shape", success.shape)
-            # print("success", success)
-
-            reward = (success - 1.)  # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
+            reward = (success - 1.) + (gpenalty - 1.)  # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
 
             return reward
 
@@ -347,13 +345,9 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         initial_qpos = np.concatenate([initial_pos, initial_quat])
         self.initial_qpos = initial_qpos
         self.sim.data.set_joint_qpos("scissors_hinge_1:joint", -0.52358)  # はさみの回転角度の初期化
-        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 1.02358)
+        self.sim.data.set_joint_qpos("scissors_hinge_2:joint", 1.02358)  # 1.02358
         # angle = self.sim.data.get_joint_qpos("scissors_hinge:joint")    # hinge:jointが0にリセットいるかの確認
         # print("角度は", angle)
-
-        # 現在のrobot0:z_sliderの位置を取得
-        current_position = self.sim.data.get_joint_qpos("robot0:zslider")
-        self.sim.data.set_joint_qpos("robot0:zslider", current_position - 0.1)  # ハンドを下に0.1移動
 
         self.step_n = 0
 
@@ -473,7 +467,29 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         posgrasp = self._get_grasp_center_space(radius=radius)
         # posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
         posobject = self.init_object_qpos[:3]   # オブジェクトの位置は、初期位置の情報にした。
-        return mean_squared_error(posgrasp, posobject, squared=False) < 0.05   # はさみの中心とつかむ場所との誤差なので、0.05よりももうすこし広げて寛容にしたほうがいいかもしれない
+        return mean_squared_error(posgrasp, posobject, squared=False) < 0.03   # はさみの中心とつかむ場所との誤差なので、0.05よりももうすこし広げて寛容にしたほうがいいかもしれない
+
+
+    def _get_grasp_center_space_fingertip(self, radius=0.07):
+        # 指先(人差し指)の位置を取得
+        pospalm = self.sim.data.site_xpos[self.sim.model.site_name2id("robot0:S_fftip")]
+        rotpalm = Rotation.from_matrix(
+            self.sim.data.site_xmat[self.sim.model.site_name2id("robot0:S_fftip")].reshape([3, 3]))
+
+        pospalm = pospalm + rotpalm.apply([0, 0, 0.05])
+        rotgrasp = rotpalm * euler2mat([np.pi / 2, 0, 0])
+        posgrasp = pospalm + rotgrasp.apply([0, 0, radius+0.02])
+        return posgrasp
+
+    def _is_in_grasp_space_fingertip(self, radius=0.05):
+        # 指先がはさみの穴の近くにあるかどうか
+        posgrasp = self._get_grasp_center_space(radius=radius)
+        # posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
+        posobject = self.init_object_qpos[:3]  # はさみの穴の位置
+        x = self.init_object_qpos[0]
+        y = self.init_object_qpos[1]
+        z = self.init_object_qpos[2]
+        return mean_squared_error(posgrasp, posobject, squared=False) < 0.03
 
     def _display_grasp_space(self):
         # show a direction for the grasp
@@ -566,6 +582,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             "is_in_grasp_space": 1.0 if self._is_in_grasp_space() else 0.0
         }
         # print("info['distance_palm_scissors']", info['distance_palm_scissors'])
+        # print("info['is_in_grasp_space']", info["is_in_grasp_space"])
         reward = self.compute_reward(obs['achieved_angle'], self.desired_angle, info)
 
         # if self.step_n < 20:           # オブジェクト(はさみ)ははじめから固定されているので、初期位置にセットする必要はなし
