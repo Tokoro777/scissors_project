@@ -144,11 +144,11 @@ https://www.shadowrobot.com/wp-content/uploads/shadow_dexterous_hand_technical_s
 			<body name="scissors_1" pos="0 0 0">
 				<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>
                 <joint name="scissors_hinge_1:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-0.52358 0" damping="1" armature="0.01"></joint>
-				<geom friction="1.5 0.005 0.001" type="mesh" mesh="target0:Scissors_half" euler="0 3.1415 0" mass="100"></geom>  # euler="0 3.1415 0.52358"
+				<geom friction="1.5 0.005 0.001" type="mesh" mesh="target0:Scissors_half" euler="0 3.1415 0.52358" mass="100"></geom>  # euler="0 3.1415 0.52358"
 				<body name="scissors_2" pos="0 0 0">
 					<inertial diaginertia="1 1 1" mass="0.1" pos="0 0 0" quat="0 0 0 0"></inertial>
                     <joint name="scissors_hinge_2:joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="0 0.52358" damping="1" armature="0.01"></joint>
-					<geom friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half" euler="0 0 3.1415" mass="100"></geom>  # euler="0 0 2.6179"
+					<geom friction="1.5 0.005 0.0001" type="mesh" mesh="target0:Scissors_half" euler="0 0 2.6179" mass="100"></geom>  # euler="0 0 2.6179"
 				</body>
 			</body>
 		</body>

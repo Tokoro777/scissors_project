@@ -469,10 +469,11 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _is_in_grasp_space(self, radius=0.05):
         posgrasp = self._get_grasp_center_space(radius=radius)
         # posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
-        x = self.init_object_qpos[0] - 0.3
-        y = self.init_object_qpos[1] + 0.3
-        z = self.init_object_qpos[2]
-        posobject = [x, y, z]   # オブジェクトの位置は、初期位置の情報にした。
+        posobject = self.init_object_qpos[:3]
+        # x = self.init_object_qpos[0] - 0.3
+        # y = self.init_object_qpos[1] + 0.3
+        # z = self.init_object_qpos[2]
+        # posobject = [x, y, z]   # オブジェクトの位置は、初期位置の情報にした。
         return mean_squared_error(posgrasp, posobject, squared=False) < 0.05   # はさみの中心とつかむ場所との誤差なので、0.05よりももうすこし広げて寛容にしたほうがいいかもしれない
 
     def _display_grasp_space(self):
@@ -562,7 +563,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         z = self.init_object_qpos[2]
         posobject = [x, y, z]
 
-        return mean_squared_error(posgrasp, posobject, squared=False) < 0.015
+        return mean_squared_error(posgrasp, posobject, squared=False) < 0.02
 
     def _display_scissors_hole_lftip(self):
         # show a direction for the grasp
