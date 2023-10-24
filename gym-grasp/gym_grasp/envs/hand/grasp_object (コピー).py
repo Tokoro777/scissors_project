@@ -110,7 +110,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
             self.object = self.object_list[self.target_id]  # target
 
         self.step_n = 0
-        self.init_object_qpos = np.array([1.06, 0.845, 0.306, 1, 0, 0, 0])  # [1.05, 0.827, 0.303, 1, 0, 0, 0])
+        self.init_object_qpos = np.array([1.06, 0.845, 0.30, 1, 0, 0, 0])  # [1.05, 0.827, 0.303, 1, 0, 0, 0])
 
         assert self.target_position in ['ignore', 'fixed', 'random']
         assert self.target_rotation in ['ignore', 'fixed', 'xyz', 'z', 'parallel']
@@ -135,17 +135,17 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         assert object_qpos.shape == (7,)
         return object_qpos
 
-    # def _get_achieved_angle(self):
-    #     # はさみの間の回転角度の取得
-    #     hinge_joint_angle_2 = self.sim.data.get_joint_qpos("scissors_hinge_2:joint")  # 正の値(はさみが開く場合の時)
-    #     hinge_joint_angle_1 = self.sim.data.get_joint_qpos("scissors_hinge_1:joint")  # 負の値
-    #     # print("はさみの回転角度_2:", hinge_joint_angle_2)
-    #     # print("はさみの回転角度_1:", hinge_joint_angle_1)
-    #     hinge_joint_angle = hinge_joint_angle_2 - hinge_joint_angle_1  # 正 - 負 で 正になるはず
-    #     # print("はさみの回転角度:", hinge_joint_angle)
-    #     return hinge_joint_angle
-
     def _get_achieved_angle(self):
+        # はさみの間の回転角度の取得
+        hinge_joint_angle_2 = self.sim.data.get_joint_qpos("scissors_hinge_2:joint")  # 正の値(はさみが開く場合の時)
+        hinge_joint_angle_1 = self.sim.data.get_joint_qpos("scissors_hinge_1:joint")  # 負の値
+        # print("はさみの回転角度_2:", hinge_joint_angle_2)
+        # print("はさみの回転角度_1:", hinge_joint_angle_1)
+        hinge_joint_angle = hinge_joint_angle_2 - hinge_joint_angle_1  # 正 - 負 で 正になるはず
+        # print("はさみの回転角度:", hinge_joint_angle)
+        return hinge_joint_angle
+
+    def _get_angle(self):
         # はさみのhingeの角度の取得
         hinge_joint_angle_2 = self.sim.data.get_joint_qpos("scissors_hinge_2:joint")  # 正の値(はさみが開く場合の時)
         # print("はさみの回転角度_2:", hinge_joint_angle_2)
@@ -215,19 +215,18 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
 
             # success = success * gpenalty
 
-            reward = (success - 1.) + (0.1*success_close - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
+            reward = (success - 1.) + (0.3*success_close - 1.) # - c_lambda * (success * info['e']) - cpenalty  # - gpenalty
 
             return reward
 
     # RobotEnv methods
     # ----------------------------
 
-    # def _is_success(self, achieved_goal, desired_goal, isingrasp):
-    #     d_pos, d_rot = self._goal_distance(achieved_goal, desired_goal)
-    #     achieved_pos = (d_pos < self.distance_threshold).astype(np.float32)
-    #     achieved_rot = (d_rot < self.rotation_threshold).astype(np.float32)
-    #     achieved_both = achieved_pos * achieved_rot * isingrasp
-    #     return achieved_both
+    def _is_success_angle_close(self, achieved_angle, desired_angle, isingrasp, isinhole, isinholelftip):
+        d_angle = desired_angle - achieved_angle
+        achieved_angle = (achieved_angle < 1.0).astype(np.float32)  # はさみが閉じれた状態なら成功. 回転角度が閾値以下なら閉じれたと判断
+        achieved_both = achieved_angle.flatten() * isingrasp * isinhole * isinholelftip  # 以下3つを満たしているときに成功
+        return achieved_both
 
     def _is_success_angle(self, achieved_angle, desired_angle):
         d_angle = desired_angle - achieved_angle
@@ -261,12 +260,6 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # print("success_or_failure", success_or_failure)
 
         return success_or_failure
-
-    def _is_success_angle_close(self, achieved_angle, desired_angle, isingrasp, isinhole, isinholelftip):
-        d_angle = desired_angle - achieved_angle
-        achieved_angle = (achieved_angle < 0.15).astype(np.float32)  # はさみが閉じれた状態なら成功. 回転角度が閾値以下なら閉じれたと判断
-        achieved_both = achieved_angle.flatten() * isingrasp * isinhole * isinholelftip  # 以下3つを満たしているときに成功
-        return achieved_both
 
     def _get_distance(self, palm, scissors_z_position):
         distance = palm - scissors_z_position
@@ -449,7 +442,6 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         achieved_angle = self._get_achieved_angle().ravel()  # 回転角度は1つ
         palm = self._get_palm().ravel()
         # print("palm", palm)
-        # print("scissors_hinge_2:joint", self.sim.data.get_joint_qpos("scissors_hinge_2:joint"))
         sensordata = self._get_contact_forces()
 
         observation = np.concatenate([robot_qpos, robot_qvel, achieved_angle, palm, sensordata])
@@ -476,28 +468,8 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _is_in_grasp_space(self, radius=0.05):
         posgrasp = self._get_grasp_center_space(radius=radius)
         # posobject = self.sim.data.site_xpos[self.sim.model.site_name2id("box:center")]
-        # posobject = self.init_object_qpos[:3]
-        x = self.init_object_qpos[0] - 0.03
-        y = self.init_object_qpos[1] + 0.03
-        z = self.init_object_qpos[2] - 0.03
-        posobject = [x, y, z]   # オブジェクトの位置は、初期位置の情報にした。
+        posobject = self.init_object_qpos[:3]   # オブジェクトの位置は、初期位置の情報にした。
         return mean_squared_error(posgrasp, posobject, squared=False) < 0.05   # はさみの中心とつかむ場所との誤差なので、0.05よりももうすこし広げて寛容にしたほうがいいかもしれない
-
-    def _display_center(self):
-        # show a direction for the grasp
-        if self.viewer is not None:
-
-            x = self.init_object_qpos[0] - 0.03
-            y = self.init_object_qpos[1] + 0.03
-            z = self.init_object_qpos[2] - 0.03
-            posobject = [x, y, z]
-
-            self.viewer.add_marker(type=const.GEOM_SPHERE,
-                                   pos=posobject,
-                                   label=" ",
-                                   size=(0.01, 0.01, 0.01),
-                                   rgba=(0, 0, 1, 1),
-                                   emission=1)
 
     def _display_grasp_space(self):
         # show a direction for the grasp
@@ -541,7 +513,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _is_in_scissors_hole(self, radius=0.05):
         # 人差し指がはさみの穴の近くにあるかどうか
         posgrasp = self._get_scissors_hole(radius=radius)
-        radians = np.pi/4 + np.pi*2/3 + self._get_achieved_angle()  # 45度と120度とはさみ２の回転角度
+        radians = np.pi/4 + np.pi*2/3 + self._get_angle()  # 45度と120度とはさみ２の回転角度
         x = self.init_object_qpos[0] + self.r_hole * np.cos(radians)
         y = self.init_object_qpos[1] + self.r_hole * np.sin(radians)
         z = self.init_object_qpos[2]
@@ -552,7 +524,7 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         # show a direction for the grasp
         if self.viewer is not None:
 
-            radians = np.pi / 4 + np.pi * 2 / 3 + self._get_achieved_angle()  # 45度と120度とはさみ２の回転角度
+            radians = np.pi / 4 + np.pi * 2 / 3 + self._get_angle()  # 45度と120度とはさみ２の回転角度
             x = self.init_object_qpos[0] + self.r_hole * np.cos(radians)
             y = self.init_object_qpos[1] + self.r_hole * np.sin(radians)
             z = self.init_object_qpos[2]
@@ -579,20 +551,19 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
     def _is_in_scissors_hole_lftip(self, radius=0.05):
         # 小指がはさみの穴の近くにあるかどうか
         posgrasp = self._get_scissors_hole_lftip(radius=radius)
-        radians = 0.0 + np.pi*2/3 + self._get_achieved_angle()  # 0度と120度とはさみ２の回転角度
-        # print("self._get_achieved_angle()", self._get_achieved_angle())
+        radians = 0.0 + np.pi*2/3 + self._get_angle()  # 0度と120度とはさみ２の回転角度
+        # print("self._get_angle()", self._get_angle())
         x = self.init_object_qpos[0] + self.r_hole_lftip * np.cos(radians)
         y = self.init_object_qpos[1] + self.r_hole_lftip * np.sin(radians)
         z = self.init_object_qpos[2]
         posobject = [x, y, z]
-
-        return mean_squared_error(posgrasp, posobject, squared=False) < 0.02
+        return mean_squared_error(posgrasp, posobject, squared=False) < 0.06
 
     def _display_scissors_hole_lftip(self):
         # show a direction for the grasp
         if self.viewer is not None:
 
-            radians = 0.0 + np.pi * 2 / 3 + self._get_achieved_angle()  # 0度と150度とはさみ２の回転角度
+            radians = 0.0 + np.pi * 2 / 3 + self._get_angle()  # 0度と150度とはさみ２の回転角度
             x = self.init_object_qpos[0] + self.r_hole_lftip * np.cos(radians)
             y = self.init_object_qpos[1] + self.r_hole_lftip * np.sin(radians)
             z = self.init_object_qpos[2]
@@ -681,13 +652,11 @@ class ManipulateEnv(hand_env.HandEnv, utils.EzPickle):
         if self._is_in_grasp_space():
             self._display_grasp_space()
 
-        # if self._is_in_scissors_hole():
-        self._display_scissors_hole()
+        if self._is_in_scissors_hole():
+            self._display_scissors_hole()
 
-        # if self._is_in_scissors_hole_lftip():
-        self._display_scissors_hole_lftip()
-
-        # self._display_center()
+        if self._is_in_scissors_hole_lftip():
+            self._display_scissors_hole_lftip()
 
         return obs, reward, done, info
 
